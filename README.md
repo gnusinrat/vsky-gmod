@@ -8,6 +8,7 @@ if you want to be added as a co-creator on the workshop page say that too
 
 если вы хотите, чтобы вас добавили в качестве соавтора на странице мастерской, тоже скажите об этом.
 
+---
 
 # vsky-gmod
 repo of all vsky gmod addons - feel free to download and edit
