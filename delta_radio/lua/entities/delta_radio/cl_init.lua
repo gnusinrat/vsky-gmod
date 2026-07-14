@@ -11,6 +11,66 @@ for i = 1, 350 do
     })
 end
 
+local bmFont = { chars = {}, mat = nil, scaleW = 256, scaleH = 256, loaded = false }
+
+local function LoadDeltaruneFont()
+    bmFont.mat = Material("vsky/deltarune_font")
+    local data = file.Read("materials/vsky/deltarune_font.txt", "GAME")
+    if not data then return end
+    local common = string.match(data, "common (.-)\n")
+    if common then
+        bmFont.scaleW = tonumber(string.match(common, "scaleW=(%d+)")) or 256
+        bmFont.scaleH = tonumber(string.match(common, "scaleH=(%d+)")) or 256
+    end
+    for charData in string.gmatch(data, "char (.-)\n") do
+        local id = tonumber(string.match(charData, "id=(%d+)"))
+        if id then
+            bmFont.chars[id] = {
+                x = tonumber(string.match(charData, "x=(%d+)")) or 0,
+                y = tonumber(string.match(charData, "y=(%d+)")) or 0,
+                w = tonumber(string.match(charData, "width=(%d+)")) or 0,
+                h = tonumber(string.match(charData, "height=(%d+)")) or 0,
+                xoff = tonumber(string.match(charData, "xoffset=(%-?%d+)")) or 0,
+                yoff = tonumber(string.match(charData, "yoffset=(%-?%d+)")) or 0,
+                xadv = tonumber(string.match(charData, "xadvance=(%d+)")) or 0
+            }
+        end
+    end
+    bmFont.loaded = true
+end
+LoadDeltaruneFont()
+
+local function DrawBMText(text, x, y, col)
+    if not bmFont.loaded then return 0 end
+    surface.SetMaterial(bmFont.mat)
+    surface.SetDrawColor(col.r, col.g, col.b, col.a or 255)
+    local cx = x
+    for _, code in utf8.codes(text) do
+        local ch = bmFont.chars[code]
+        if ch then
+            local drawX = cx + ch.xoff
+            local drawY = y + ch.yoff
+            local u0 = ch.x / bmFont.scaleW
+            local v0 = ch.y / bmFont.scaleH
+            local u1 = (ch.x + ch.w) / bmFont.scaleW
+            local v1 = (ch.y + ch.h) / bmFont.scaleH
+            surface.DrawTexturedRectUV(drawX, drawY, ch.w, ch.h, u0, v0, u1, v1)
+            cx = cx + ch.xadv
+        end
+    end
+    return cx - x
+end
+
+local function GetBMTextWidth(text)
+    if not bmFont.loaded then return 0 end
+    local w = 0
+    for _, code in utf8.codes(text) do
+        local ch = bmFont.chars[code]
+        if ch then w = w + ch.xadv end
+    end
+    return w
+end
+
 function ENT:Initialize()
     self.CurrentLoadedSong = ""
     self.AudioChannel = nil
@@ -261,4 +321,37 @@ net.Receive("DeltaRadio_OpenMenu", function()
 
     sheet:AddSheet("Плеер", panelPlayer, "icon16/music.png")
     sheet:AddSheet("Настройки", panelSettings, "icon16/cog.png")
+end)
+
+hook.Add("HUDPaint", "DeltaRadio_SongHUD", function()
+    local ply = LocalPlayer()
+    if not IsValid(ply) then return end
+    
+    local closestRadio = nil
+    local minDist = 400 * 400
+
+    for _, ent in ipairs(ents.FindByClass("delta_radio")) do
+        if ent:GetIsPlaying() and ent:GetSongName() ~= "" then
+            local dist = ply:GetPos():DistToSqr(ent:GetPos())
+            if dist < minDist then
+                minDist = dist
+                closestRadio = ent
+            end
+        end
+    end
+
+    if IsValid(closestRadio) then
+        local songRaw = closestRadio:GetSongName()
+        local songName = string.StripExtension(songRaw)
+        local text = "♪ ~ " .. songName
+        
+        if bmFont.loaded then
+            local tw = GetBMTextWidth(text)
+            local x = ScrW() - tw - 30
+            local y = 30
+            
+            DrawBMText(text, x + 2, y + 2, Color(0, 0, 0, 255))
+            DrawBMText(text, x, y, Color(255, 255, 255, 255))
+        end
+    end
 end)
